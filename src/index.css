@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0f1419;
+    color: #e0e6ed;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[#5a8fc4] text-white px-6 py-3 rounded-lg font-medium;
+    @apply hover:bg-[#4a7fb4] transition-all duration-200;
+    @apply hover:shadow-lg hover:-translate-y-0.5;
+  }
+  
+  .btn-secondary {
+    @apply bg-[#2d3e50] text-[#a8c5e0] px-4 py-2 rounded-lg font-medium;
+    @apply border border-[#3d5068] hover:bg-[#1a2332] transition-all;
+  }
+  
+  .card {
+    @apply bg-[#1a2332] border border-[#2d3e50] rounded-lg p-6;
+    @apply shadow-xl;
+  }
+  
+  .input-dark {
+    @apply bg-[#1a2332] border border-[#2d3e50] text-[#e0e6ed];
+    @apply rounded-lg px-4 py-2 focus:outline-none focus:border-[#5a8fc4];
+    @apply placeholder-[#6b7d8f];
+  }
+  
+  .tab-button {
+    @apply px-6 py-3 font-medium text-[#8b9eb3];
+    @apply bg-[#1a2332]/30 border-l-4 border-[#5a8fc4]/20;
+    @apply hover:text-[#a8c5e0] hover:bg-[#1a2332] transition-all;
+    @apply rounded-r-lg;
+  }
+  
+  .tab-button-active {
+    @apply border-l-[#5a8fc4] text-[#a8c5e0] font-semibold bg-[#1a2332];
+  }
+}
