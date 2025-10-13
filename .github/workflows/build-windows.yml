@@ -2,9 +2,7 @@ name: Build Windows
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -12,33 +10,24 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build Tauri app for Windows
-        run: npm run tauri:build:windows
-      
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-
-      - name: Upload NSIS installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-nsis
-          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-        if: always()
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Build Tauri app
+      run: npm run tauri build
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: flad-analisis-windows
+        path: src-tauri/target/release/bundle/msi/*.msi
