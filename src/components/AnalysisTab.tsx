@@ -51,21 +51,46 @@ export function AnalysisTab() {
 
   useEffect(() => {
     const savedDBs = localStorage.getItem(STORAGE_KEY);
+    let databases: LoadedDatabase[] = [];
+    
     if (savedDBs) {
       try {
-        setLoadedDatabases(JSON.parse(savedDBs));
+        databases = JSON.parse(savedDBs);
+        setLoadedDatabases(databases);
       } catch (error) {
         console.error('Error cargando BDs:', error);
       }
     }
 
     const savedFilters = localStorage.getItem(FILTERS_KEY);
+    let filters: Record<string, string[]> = {};
+    
     if (savedFilters) {
       try {
-        setSelectedJardines(JSON.parse(savedFilters));
+        filters = JSON.parse(savedFilters);
       } catch (error) {
         console.error('Error cargando filtros:', error);
       }
+    }
+    
+    // INICIALIZAR FILTROS AUTOMÁTICAMENTE: Si no hay filtros o están vacíos,
+    // seleccionar todos los jardines de cada BD cargada
+    const initializedFilters = { ...filters };
+    let needsUpdate = false;
+    
+    databases.forEach(db => {
+      const key = `${db.contract}-${db.line}`;
+      if (!initializedFilters[key] || initializedFilters[key].length === 0) {
+        initializedFilters[key] = db.data.catalogos.jardines.map(j => j.codigo);
+        needsUpdate = true;
+      }
+    });
+    
+    setSelectedJardines(initializedFilters);
+    
+    // Guardar filtros inicializados
+    if (needsUpdate) {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify(initializedFilters));
     }
   }, []);
 
