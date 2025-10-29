@@ -4,9 +4,9 @@ import { DatabaseJSON, ContractType, LineType, LoadedDatabase } from '../types';
 import { CONTRACTS, LINES, STORAGE_KEY, FILTERS_KEY } from '../constants';
 
 interface FilterTabProps {
-  data: DatabaseJSON | null;
+  data?: DatabaseJSON | null;
   filters?: any;
-  onFilterChange: (filters: any) => void;
+  onFilterChange?: (filters: any) => void;
 }
 
 export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: FilterTabProps) {
