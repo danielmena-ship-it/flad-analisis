@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Filter, X, Grid3x3, ChevronRight, ChevronDown } from 'lucide-react';
 import { Requerimiento, RequerimientoStatus, LoadedDatabase, ContractType, LineType } from '../types';
 import { STATUS_LABELS, getRequerimientoStatus } from '../utils';
+import { STORAGE_KEY } from '../constants';
 
-const STORAGE_KEY = 'flad_loaded_databases';
-const MATRIX_FILTERS_KEY = 'flad_matrix_filters';
+const MATRIX_FILTERS_KEY = 'flad-analisis-matrix-filters';
 
 export function MatrixTab() {
   const [loadedDatabases, setLoadedDatabases] = useState<LoadedDatabase[]>([]);
@@ -27,10 +27,15 @@ export function MatrixTab() {
     const savedFilters = localStorage.getItem(MATRIX_FILTERS_KEY);
     if (savedFilters) {
       try {
-        setSelectedStates(JSON.parse(savedFilters));
+        const parsed = JSON.parse(savedFilters);
+        // Si está vacío, inicializar con todos
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedStates(parsed);
+        } else {
+          setSelectedStates(['pagado', 'recibido', 'atrasado', 'en_curso', 'sin_curso']);
+        }
       } catch (error) {
         console.error('Error cargando filtros matriz:', error);
-        // Si hay error, inicializar con todos
         setSelectedStates(['pagado', 'recibido', 'atrasado', 'en_curso', 'sin_curso']);
       }
     } else {
@@ -48,7 +53,7 @@ export function MatrixTab() {
   const allRequerimientos = useMemo(() => {
     const reqs: Requerimiento[] = [];
     loadedDatabases.forEach(db => {
-      reqs.push(...db.data.datos.requerimientos);
+      reqs.push(...db.data.requerimientos);
     });
     return reqs;
   }, [loadedDatabases]);
@@ -96,7 +101,7 @@ export function MatrixTab() {
     
     // Sumar valores por jardín
     loadedDatabases.forEach(db => {
-      const dbRequerimientos = db.data.datos.requerimientos.filter(req => {
+      const dbRequerimientos = db.data.requerimientos.filter(req => {
         const status = getRequerimientoStatus(req);
         return selectedStates.includes(status);
       });
@@ -109,7 +114,7 @@ export function MatrixTab() {
         if (viewMode === 'cantidades') {
           matrix[db.line][db.contract][req.jardin_codigo] += 1;
         } else {
-          const valor = req.a_pago ? req.a_pago : req.precio_total;
+          const valor = req.precio_total - req.multa;
           matrix[db.line][db.contract][req.jardin_codigo] += valor;
         }
       });
@@ -124,7 +129,7 @@ export function MatrixTab() {
     
     loadedDatabases.forEach(db => {
       if (!jardines[db.line]) {
-        jardines[db.line] = db.data.catalogos.jardines;
+        jardines[db.line] = db.data.jardines;
       }
     });
     
@@ -160,7 +165,7 @@ export function MatrixTab() {
     
     // Sumar valores de requerimientos filtrados
     loadedDatabases.forEach(db => {
-      const dbRequerimientos = db.data.datos.requerimientos.filter(req => {
+      const dbRequerimientos = db.data.requerimientos.filter(req => {
         const status = getRequerimientoStatus(req);
         return selectedStates.includes(status);
       });
@@ -169,8 +174,7 @@ export function MatrixTab() {
         if (viewMode === 'cantidades') {
           matrix[db.contract][db.line] += 1;
         } else {
-          // Si tiene a_pago (fecha_recepcion presente), usar a_pago, sino usar precio_total
-          const valor = req.a_pago ? req.a_pago : req.precio_total;
+          const valor = req.precio_total - req.multa;
           matrix[db.contract][db.line] += valor;
         }
       });
@@ -345,10 +349,9 @@ export function MatrixTab() {
                     const jardines = jardinesByLine[line.id] || [];
                     
                     return (
-                      <>
+                      <Fragment key={line.id}>
                         {/* Fila principal de línea */}
                         <tr 
-                          key={line.id} 
                           className="border-b border-[#2d3e50]/50 hover:bg-[#5a8fc4]/10 transition-colors cursor-pointer bg-[#0f1419]"
                           onClick={() => toggleLine(line.id)}
                         >
@@ -428,7 +431,7 @@ export function MatrixTab() {
                             </tr>
                           );
                         })}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>

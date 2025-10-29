@@ -2,15 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { BarChart3, FileDown, Filter, X } from 'lucide-react';
 import { RequerimientoStatus, Requerimiento, LoadedDatabase } from '../types';
-import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus } from '../utils';
+import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus, calcularMontoAPagar } from '../utils';
+import { CONTRACTS, LINES, STORAGE_KEY, FILTERS_KEY } from '../constants';
 import { FilterTab } from './FilterTab';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
-
-const STORAGE_KEY = 'flad_loaded_databases';
-const FILTERS_KEY = 'flad_filters';
 
 // Paleta de colores pasteles profesionales
 // const PASTEL_COLORS = {
@@ -81,7 +79,7 @@ export function AnalysisTab() {
     databases.forEach(db => {
       const key = `${db.contract}-${db.line}`;
       if (!initializedFilters[key] || initializedFilters[key].length === 0) {
-        initializedFilters[key] = db.data.catalogos.jardines.map(j => j.codigo);
+        initializedFilters[key] = db.data.jardines.map(j => j.codigo);
         needsUpdate = true;
       }
     });
@@ -105,7 +103,7 @@ export function AnalysisTab() {
         return;
       }
 
-      const reqs = db.data.datos.requerimientos.filter(req => 
+      const reqs = db.data.requerimientos.filter(req => 
         filteredJardines.includes(req.jardin_codigo)
       );
 
@@ -149,7 +147,7 @@ export function AnalysisTab() {
       }
 
       const status = getRequerimientoStatus(req);
-      const value = viewMode === 'cantidades' ? 1 : (req.a_pago ? req.a_pago : req.precio_total);
+      const value = viewMode === 'cantidades' ? 1 : calcularMontoAPagar(req);
       grouped.get(key)![status] += value;
     });
 
@@ -188,8 +186,63 @@ export function AnalysisTab() {
 
   if (!stats || combinedRequerimientos.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-[#6b7d8f]">
-        <p>No hay datos para analizar. Seleccione jardines en Filtros.</p>
+      <div className="px-6 pb-6">
+        {/* Header con botón de filtros siempre visible */}
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-[#e0e6ed] flex items-center gap-3 mb-2">
+              <BarChart3 className="w-7 h-7 text-[#5a8fc4]" />
+              Análisis Estadístico
+            </h2>
+            <p className="text-sm text-[#8b9eb3]">
+              {combinedRequerimientos.length} requerimientos de {loadedDatabases.reduce((sum, db) => sum + db.data.requerimientos.length, 0)} totales
+            </p>
+          </div>
+
+          <button
+            onClick={() => setModalFiltrosAbierto(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition bg-[#f59e0b] hover:bg-[#e08e0a] text-white shadow-lg"
+          >
+            <Filter className="w-4 h-4" />
+            Filtros
+          </button>
+        </div>
+
+        {/* Mensaje de sin datos */}
+        <div className="flex items-center justify-center h-96 text-[#6b7d8f]">
+          <div className="text-center">
+            <Filter size={48} className="mx-auto mb-4 text-[#4b5563]" />
+            <p className="text-lg">No hay datos para analizar.</p>
+            <p className="text-sm mt-2">Seleccione jardines en Filtros.</p>
+          </div>
+        </div>
+
+        {/* Modal de filtros */}
+        {modalFiltrosAbierto && (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setModalFiltrosAbierto(false)}
+          >
+            <div 
+              className="bg-[#1a2332] rounded-xl shadow-2xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-[#2d3e50]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-[#1a2332] border-b border-[#2d3e50] px-6 py-4 flex items-center justify-between z-10">
+                <h3 className="text-xl font-bold text-[#e0e6ed] flex items-center gap-2">
+                  <Filter className="w-5 h-5 text-[#5a8fc4]" />
+                  Filtrar Jardines
+                </h3>
+                <button
+                  onClick={() => setModalFiltrosAbierto(false)}
+                  className="text-[#8b9eb3] hover:text-[#e0e6ed] transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <FilterTab />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -274,25 +327,16 @@ export function AnalysisTab() {
 
       yPos += 10;
 
-      const contracts = [
-        { id: 'mantencion', label: 'Mantención' },
-        { id: 'calefaccion', label: 'Calefacción' },
-        { id: 'area_verde', label: 'Áreas Verdes' },
-        { id: 'ascensores', label: 'Ascensores' }
-      ];
-
-      const lines = [
-        { id: 'linea_1', label: 'L1' },
-        { id: 'linea_2', label: 'L2' },
-        { id: 'linea_3', label: 'L3' },
-        { id: 'linea_4', label: 'L4' },
-        { id: 'linea_5', label: 'L5' }
-      ];
+      // Usar labels cortas para PDF
+      const linesShort = LINES.map(l => ({ 
+        id: l.id, 
+        label: l.label.replace('Línea ', 'L') 
+      }));
 
       // Listado compacto de BDs
       loadedDatabases.forEach(db => {
-        const contract = contracts.find(c => c.id === db.contract);
-        const line = lines.find(l => l.id === db.line);
+        const contract = CONTRACTS.find(c => c.id === db.contract);
+        const line = linesShort.find(l => l.id === db.line);
 
         if (contract && line) {
           // Verificar si necesitamos nueva página
@@ -333,8 +377,8 @@ export function AnalysisTab() {
       yPos += 10;
 
       // Mostrar jardines seleccionados
-      contracts.forEach(contract => {
-        lines.forEach(line => {
+      CONTRACTS.forEach(contract => {
+        linesShort.forEach(line => {
           const key = `${contract.id}-${line.id}`;
           const jardines = selectedJardines[key] || [];
           const db = loadedDatabases.find(d => d.contract === contract.id && d.line === line.id);

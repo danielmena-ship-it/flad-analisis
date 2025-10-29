@@ -1,15 +1,13 @@
 import { ChevronDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DatabaseJSON, ContractType, LineType, LoadedDatabase } from '../types';
+import { CONTRACTS, LINES, STORAGE_KEY, FILTERS_KEY } from '../constants';
 
 interface FilterTabProps {
   data: DatabaseJSON | null;
   filters?: any;
   onFilterChange: (filters: any) => void;
 }
-
-const STORAGE_KEY = 'flad_loaded_databases';
-const FILTERS_KEY = 'flad_filters';
 
 export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: FilterTabProps) {
   const [loadedDatabases, setLoadedDatabases] = useState<LoadedDatabase[]>([]);
@@ -40,7 +38,7 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
         restored.forEach(db => {
           const key = `${db.contract}-${db.line}`;
           if (!initializedFilters[key] || initializedFilters[key].length === 0) {
-            initializedFilters[key] = db.data.catalogos.jardines.map(j => j.codigo);
+            initializedFilters[key] = db.data.jardines.map(j => j.codigo);
           }
         });
         
@@ -57,21 +55,6 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
       localStorage.setItem(FILTERS_KEY, JSON.stringify(selectedJardines));
     }
   }, [selectedJardines]);
-
-  const contracts: { id: ContractType; label: string }[] = [
-    { id: 'mantencion', label: 'Mantención' },
-    { id: 'calefaccion', label: 'Calefacción' },
-    { id: 'area_verde', label: 'Áreas Verdes' },
-    { id: 'ascensores', label: 'Ascensores' }
-  ];
-
-  const lines: { id: LineType; label: string }[] = [
-    { id: 'linea_1', label: 'Línea 1' },
-    { id: 'linea_2', label: 'Línea 2' },
-    { id: 'linea_3', label: 'Línea 3' },
-    { id: 'linea_4', label: 'Línea 4' },
-    { id: 'linea_5', label: 'Línea 5' }
-  ];
 
   const getDatabase = (contract: ContractType, line: LineType) => {
     return loadedDatabases.find(db => db.contract === contract && db.line === line);
@@ -104,7 +87,7 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
     if (!db) return;
 
     const current = selectedJardines[key] || [];
-    const allJardines = db.data.catalogos.jardines.map(j => j.codigo);
+    const allJardines = db.data.jardines.map(j => j.codigo);
     
     // Si todos están seleccionados, deseleccionar todos. Si no, seleccionar todos.
     const updated = current.length === allJardines.length ? [] : allJardines;
@@ -121,7 +104,7 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
     if (!db) return false;
     
     const current = selectedJardines[key] || [];
-    return current.length === db.data.catalogos.jardines.length && current.length > 0;
+    return current.length === db.data.jardines.length && current.length > 0;
   };
 
   const getSelectedCount = (contract: ContractType, line: LineType) => {
@@ -149,7 +132,7 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
           <thead>
             <tr className="border-b border-[#2d3e50]">
               <th className="text-left py-2 px-3 text-[#8b9eb3] font-medium text-sm">Línea</th>
-              {contracts.map(contract => (
+              {CONTRACTS.map(contract => (
                 <th key={contract.id} className="text-center py-2 px-3 text-[#8b9eb3] font-medium text-sm">
                   {contract.label}
                 </th>
@@ -157,15 +140,15 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
             </tr>
           </thead>
           <tbody>
-            {lines.map(line => (
+            {LINES.map(line => (
               <tr key={line.id} className="border-b border-[#2d3e50]/50">
                 <td className="py-2 px-3 text-[#e0e6ed] font-medium text-sm">{line.label}</td>
-                {contracts.map(contract => {
+                {CONTRACTS.map(contract => {
                   const db = getDatabase(contract.id, line.id);
                   const key = getKey(contract.id, line.id);
                   const isOpen = openDropdown === key;
                   const selectedCount = getSelectedCount(contract.id, line.id);
-                  const totalJardines = db?.data.catalogos.jardines.length || 0;
+                  const totalJardines = db?.data.jardines.length || 0;
                   
                   return (
                     <td key={key} className="py-2 px-3 text-center relative">
@@ -191,7 +174,7 @@ export function FilterTab({ data: _data, onFilterChange: _onFilterChange }: Filt
                                   />
                                   <span className="text-sm text-[#5a8fc4] font-semibold leading-tight">Todos</span>
                                 </label>
-                                {db.data.catalogos.jardines.map(jardin => {
+                                {db.data.jardines.map(jardin => {
                                   const selected = (selectedJardines[key] || []).includes(jardin.codigo);
                                   return (
                                     <label

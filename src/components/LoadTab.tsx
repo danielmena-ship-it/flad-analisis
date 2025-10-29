@@ -1,10 +1,12 @@
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { Download, FileSpreadsheet, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DatabaseJSON, ContractType, LineType, LoadedDatabase } from '../types';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-
-const STORAGE_KEY = 'flad_loaded_databases';
+import { writeFile } from '@tauri-apps/plugin-fs';
+import { esFormatoNuevo, obtenerFechaExportacion, enriquecerRequerimientos } from '../utils/database';
+import { getRequerimientoStatus, formatearFecha } from '../utils';
+import { CONTRACTS, LINES, STORAGE_KEY } from '../constants';
+import * as XLSX from 'xlsx';
 
 export function LoadTab() {
   const [loadedDatabases, setLoadedDatabases] = useState<LoadedDatabase[]>([]);
@@ -26,21 +28,6 @@ export function LoadTab() {
     }
   }, []);
 
-  const contracts: { id: ContractType; label: string }[] = [
-    { id: 'mantencion', label: 'Mantención' },
-    { id: 'calefaccion', label: 'Calefacción' },
-    { id: 'area_verde', label: 'Áreas Verdes' },
-    { id: 'ascensores', label: 'Ascensores' }
-  ];
-
-  const lines: { id: LineType; label: string }[] = [
-    { id: 'linea_1', label: 'Línea 1' },
-    { id: 'linea_2', label: 'Línea 2' },
-    { id: 'linea_3', label: 'Línea 3' },
-    { id: 'linea_4', label: 'Línea 4' },
-    { id: 'linea_5', label: 'Línea 5' }
-  ];
-
   const isLoaded = (contract: ContractType, line: LineType): boolean => {
     return loadedDatabases.some(db => db.contract === contract && db.line === line);
   };
@@ -48,14 +35,6 @@ export function LoadTab() {
   const getFechaImportacion = (contract: ContractType, line: LineType): string => {
     const db = loadedDatabases.find(db => db.contract === contract && db.line === line);
     return db?.fechaImportacion || '';
-  };
-
-  const formatearFecha = (isoDate: string): string => {
-    const fecha = new Date(isoDate);
-    const dia = String(fecha.getDate()).padStart(2, '0');
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    const anio = fecha.getFullYear();
-    return `${dia}/${mes}/${anio}`;
   };
 
   const handleButtonClick = (contract: ContractType, line: LineType) => {
@@ -71,13 +50,21 @@ export function LoadTab() {
 
     try {
       const text = await file.text();
-      const data: DatabaseJSON = JSON.parse(text);
-      const fechaFormateada = formatearFecha(data.metadata.fecha_exportacion);
+      const data = JSON.parse(text) as DatabaseJSON;
+      
+      // Validar formato
+      if (!esFormatoNuevo(data)) {
+        alert('⚠️ Formato inválido. Exporta desde FLAD actualizado.');
+        return;
+      }
+      
+      const fechaExportacion = obtenerFechaExportacion(data);
+      const fechaFormateada = formatearFecha(fechaExportacion);
       
       const newDB: LoadedDatabase = {
         contract: selectedContract,
         line: selectedLine,
-        data,
+        data: data,
         fechaImportacion: fechaFormateada
       };
 
@@ -101,6 +88,18 @@ export function LoadTab() {
     }
   };
 
+  const handleDeleteDatabase = (contract: ContractType, line: LineType) => {
+    if (!confirm(`¿Eliminar base de datos ${contract} - ${line}?`)) return;
+    
+    const updatedDBs = loadedDatabases.filter(
+      db => !(db.contract === contract && db.line === line)
+    );
+    
+    setLoadedDatabases(updatedDBs);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDBs));
+    setForceUpdate(prev => prev + 1);
+  };
+
   const exportarConsolidado = async () => {
     if (loadedDatabases.length === 0) {
       alert('No hay bases de datos cargadas');
@@ -108,72 +107,103 @@ export function LoadTab() {
     }
 
     try {
-      // Consolidar todos los requerimientos
-      const todosRequerimientos = loadedDatabases.flatMap(db => 
-        db.data.datos.requerimientos.map(req => ({
-          ...req,
-          contrato: db.contract,
-          linea: db.line
-        }))
-      );
+      const workbook = XLSX.utils.book_new();
 
-      // Generar CSV
-      const headers = [
-        'contrato',
-        'linea',
-        'id',
-        'jardin_codigo',
-        'jardin_nombre',
-        'recinto',
-        'partida_item',
-        'partida_nombre',
-        'partida_unidad',
-        'cantidad',
-        'plazo',
-        'plazo_adicional',
-        'descripcion',
-        'observaciones',
-        'precio_unitario',
-        'precio_total',
-        'fecha_inicio',
-        'plazo_total',
-        'fecha_limite',
-        'fecha_registro',
-        'estado',
-        'ot_id',
-        'fecha_recepcion',
-        'dias_atraso',
-        'multa',
-        'a_pago',
-        'informe_pago_id'
-      ];
+      // HOJA 1: Consolidado General (todos los requerimientos enriquecidos)
+      const todosRequerimientos = loadedDatabases.flatMap(db => {
+        const enriquecidos = enriquecerRequerimientos(db.data.requerimientos, db.data);
+        return enriquecidos.map(req => ({
+          Contrato: db.contract,
+          Línea: db.line,
+          'Jardín Código': req.jardin_codigo,
+          'Jardín Nombre': req.jardin_nombre,
+          Recinto: req.recinto,
+          'Partida Item': req.partida_item,
+          'Partida Nombre': req.partida_nombre,
+          Unidad: req.partida_unidad || '',
+          Cantidad: req.cantidad,
+          'Precio Unitario': req.precio_unitario,
+          'Precio Total': req.precio_total,
+          'Fecha Inicio': req.fecha_inicio,
+          'Fecha Registro': req.fecha_registro,
+          'Plazo Días': req.plazo_dias,
+          'Plazo Adicional': req.plazo_adicional,
+          'Plazo Total': req.plazo_total,
+          'Fecha Límite': req.fecha_limite,
+          'Fecha Recepción': req.fecha_recepcion || '',
+          'Días Atraso': req.dias_atraso,
+          Multa: req.multa,
+          'A Pago': req.a_pago,
+          Estado: getRequerimientoStatus(req),
+          'OT Código': req.ot_codigo || '',
+          'Informe Código': req.informe_codigo || '',
+          Descripción: req.descripcion || '',
+          Observaciones: req.observaciones || ''
+        }));
+      });
 
-      const csvContent = [
-        headers.join(','),
-        ...todosRequerimientos.map(req => 
-          headers.map(h => {
-            const value = req[h as keyof typeof req];
-            const stringValue = value === null || value === undefined ? '' : String(value);
-            // Escapar comillas y envolver en comillas si contiene comas
-            return stringValue.includes(',') || stringValue.includes('"') 
-              ? `"${stringValue.replace(/"/g, '""')}"` 
-              : stringValue;
-          }).join(',')
-        )
-      ].join('\n');
+      const wsConsolidado = XLSX.utils.json_to_sheet(todosRequerimientos);
+      XLSX.utils.book_append_sheet(workbook, wsConsolidado, 'Consolidado');
 
-      // Abrir diálogo de guardado
+      // HOJA 2: Por Contrato
+      loadedDatabases.forEach(db => {
+        const enriquecidos = enriquecerRequerimientos(db.data.requerimientos, db.data);
+        const data = enriquecidos.map(req => ({
+          Línea: db.line,
+          'Jardín': req.jardin_nombre,
+          Recinto: req.recinto,
+          Partida: req.partida_nombre,
+          Cantidad: req.cantidad,
+          'Precio Total': req.precio_total,
+          'Fecha Límite': req.fecha_limite,
+          Estado: getRequerimientoStatus(req),
+          Multa: req.multa,
+          'A Pago': req.a_pago
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(data);
+        const sheetName = db.contract.substring(0, 31); // Max 31 chars
+        XLSX.utils.book_append_sheet(workbook, ws, sheetName);
+      });
+
+      // HOJA 3: Resumen por Jardín
+      const resumenJardines = new Map<string, { cantidad: number; monto: number }>();
+      loadedDatabases.forEach(db => {
+        const enriquecidos = enriquecerRequerimientos(db.data.requerimientos, db.data);
+        enriquecidos.forEach(req => {
+          const key = `${req.jardin_nombre} (${req.jardin_codigo})`;
+          const current = resumenJardines.get(key) || { cantidad: 0, monto: 0 };
+          resumenJardines.set(key, {
+            cantidad: current.cantidad + 1,
+            monto: current.monto + req.a_pago
+          });
+        });
+      });
+
+      const dataResumen = Array.from(resumenJardines.entries()).map(([jardin, stats]) => ({
+        Jardín: jardin,
+        'Total Requerimientos': stats.cantidad,
+        'Monto Total': stats.monto
+      }));
+
+      const wsResumen = XLSX.utils.json_to_sheet(dataResumen);
+      XLSX.utils.book_append_sheet(workbook, wsResumen, 'Resumen Jardines');
+
+      // Generar buffer
+      const excelBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+
+      // Guardar archivo
       const filePath = await save({
-        defaultPath: `consolidado_${new Date().toISOString().split('T')[0]}.csv`,
+        defaultPath: `consolidado_${new Date().toISOString().split('T')[0]}.xlsx`,
         filters: [{
-          name: 'CSV',
-          extensions: ['csv']
+          name: 'Excel',
+          extensions: ['xlsx']
         }]
       });
 
       if (filePath) {
-        await writeTextFile(filePath, csvContent);
-        alert('✓ Archivo exportado correctamente');
+        await writeFile(filePath, excelBuffer);
+        alert('✓ Archivo Excel exportado correctamente');
       }
     } catch (error) {
       console.error('Error al exportar:', error);
@@ -217,7 +247,7 @@ export function LoadTab() {
           <thead>
             <tr className="border-b border-[#2d3e50]">
               <th className="text-left py-1.5 px-1 text-[#8b9eb3] font-medium text-xs">Línea</th>
-              {contracts.map(contract => (
+              {CONTRACTS.map(contract => (
                 <th key={contract.id} className="text-center py-1.5 px-1 text-[#8b9eb3] font-medium text-xs">
                   {contract.label}
                 </th>
@@ -225,10 +255,10 @@ export function LoadTab() {
             </tr>
           </thead>
           <tbody key={forceUpdate}>
-            {lines.map(line => (
+            {LINES.map(line => (
               <tr key={line.id} className="border-b border-[#2d3e50]/50">
                 <td className="py-1.5 px-1 text-[#e0e6ed] font-medium text-xs">{line.label}</td>
-                {contracts.map(contract => {
+                {CONTRACTS.map(contract => {
                   // Ascensores solo tiene línea 1
                   if (contract.id === 'ascensores' && line.id !== 'linea_1') {
                     return (
@@ -243,17 +273,31 @@ export function LoadTab() {
                   
                   return (
                     <td key={`${line.id}-${contract.id}`} className="py-1.5 px-1 text-center">
-                      <button
-                        onClick={() => handleButtonClick(contract.id, line.id)}
-                        className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${
-                          loaded
-                            ? 'bg-green-600 hover:bg-green-700 text-white'
-                            : 'bg-red-600 hover:bg-red-700 text-white'
-                        }`}
-                        title={`${contract.label} - ${line.label}${loaded ? ` (${fecha})` : ''}`}
-                      >
-                        {loaded ? fecha : <Download className="w-3 h-3" />}
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleButtonClick(contract.id, line.id)}
+                          className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                            loaded
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white'
+                          }`}
+                          title={`${contract.label} - ${line.label}${loaded ? ` (${fecha})` : ''}`}
+                        >
+                          {loaded ? fecha : <Download className="w-3 h-3" />}
+                        </button>
+                        {loaded && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDatabase(contract.id, line.id);
+                            }}
+                            className="p-1.5 rounded text-xs font-medium transition-all bg-red-600 hover:bg-red-700 text-white"
+                            title="Eliminar base de datos"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   );
                 })}
