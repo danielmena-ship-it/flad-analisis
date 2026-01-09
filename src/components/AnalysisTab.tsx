@@ -632,8 +632,7 @@ export function AnalysisTab() {
               </div>
             )}
           </div>
-        </div>
-        <div className="flex gap-3">
+          {/* Botones Filtros y Fechas */}
           <button
             onClick={() => setModalFiltrosAbierto(true)}
             className="px-5 py-2.5 rounded-lg font-medium transition bg-[#f59e0b] hover:bg-[#e08e0a] text-white flex items-center gap-2"
@@ -651,6 +650,8 @@ export function AnalysisTab() {
           {rangoActivo && (
             <span className="text-xs text-[#64748b] self-center">{rangoTexto}</span>
           )}
+        </div>
+        <div className="flex gap-3">
           <button
             onClick={exportarPDF}
             className="px-5 py-2.5 rounded-lg font-medium transition bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
