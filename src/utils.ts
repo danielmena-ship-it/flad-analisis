@@ -11,17 +11,6 @@ export function getRequerimientoStatus(req: Requerimiento): RequerimientoStatus 
 }
 
 /**
- * Calcula el monto a pagar según el estado del requerimiento
- * Solo aplica descuento de multa para estados 'recibido' y 'pagado'
- */
-export function calcularMontoAPagar(req: Requerimiento): number {
-  const status = getRequerimientoStatus(req);
-  return (status === 'recibido' || status === 'pagado') 
-    ? req.precio_total - req.multa 
-    : req.precio_total;
-}
-
-/**
  * Formatea fecha ISO a formato DD/MM/YYYY
  */
 export function formatearFecha(isoDate: string): string {
@@ -53,7 +42,7 @@ export function calculateStats(requerimientos: Requerimiento[]): StatsData {
   requerimientos.forEach(req => {
     const status = getRequerimientoStatus(req);
     stats.cantidades[status]++;
-    stats.montos[status] += calcularMontoAPagar(req);
+    stats.montos[status] += req.total_linea; // Monto real a pagar con todos los recargos
   });
 
   return stats;
@@ -74,3 +63,69 @@ export const STATUS_COLORS: Record<RequerimientoStatus, string> = {
   en_curso: '#f59e0b',
   sin_curso: '#6b7280'
 };
+
+/**
+ * Calcula rango de fechas para atajos comunes
+ */
+export function calcularRangoAtajo(tipo: 'mes' | '30dias' | 'trimestre'): { desde: string; hasta: string } {
+  const hoy = new Date();
+  let desde = new Date();
+  
+  if (tipo === 'mes') {
+    desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  } else if (tipo === '30dias') {
+    desde.setDate(hoy.getDate() - 30);
+  } else if (tipo === 'trimestre') {
+    const trimestre = Math.floor(hoy.getMonth() / 3);
+    desde = new Date(hoy.getFullYear(), trimestre * 3, 1);
+  }
+  
+  return {
+    desde: desde.toISOString().split('T')[0],
+    hasta: hoy.toISOString().split('T')[0]
+  };
+}
+
+/**
+ * Genera texto descriptivo del rango activo
+ */
+export function generarTextoRango(fechaDesde: string, fechaHasta: string): string {
+  if (!fechaDesde && !fechaHasta) return '';
+  const formatFecha = (fecha: string) => {
+    const d = new Date(fecha);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  };
+  if (fechaDesde && fechaHasta) return `${formatFecha(fechaDesde)} - ${formatFecha(fechaHasta)}`;
+  if (fechaDesde) return `Desde ${formatFecha(fechaDesde)}`;
+  if (fechaHasta) return `Hasta ${formatFecha(fechaHasta)}`;
+  return '';
+}
+
+/**
+ * Valida si una fecha_limite está dentro del rango especificado
+ */
+export function validarFechaEnRango(
+  fechaLimite: string | null,
+  fechaDesde: string,
+  fechaHasta: string
+): boolean {
+  if (!fechaDesde && !fechaHasta) return true;
+  if (!fechaLimite) return false;
+  
+  const fechaLimiteDate = new Date(fechaLimite);
+  fechaLimiteDate.setHours(0, 0, 0, 0);
+
+  if (fechaDesde) {
+    const desde = new Date(fechaDesde);
+    desde.setHours(0, 0, 0, 0);
+    if (fechaLimiteDate < desde) return false;
+  }
+
+  if (fechaHasta) {
+    const hasta = new Date(fechaHasta);
+    hasta.setHours(23, 59, 59, 999);
+    if (fechaLimiteDate > hasta) return false;
+  }
+
+  return true;
+}

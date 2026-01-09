@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { BarChart3, FileDown, Filter, X, ChevronDown, Calendar } from 'lucide-react';
 import { RequerimientoStatus, Requerimiento, LoadedDatabase } from '../types';
-import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus } from '../utils';
+import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus, calcularRangoAtajo, generarTextoRango, validarFechaEnRango } from '../utils';
 import { CONTRACTS, LINES, STORAGE_KEY, FILTERS_KEY } from '../constants';
 import { FilterTab } from './FilterTab';
 import jsPDF from 'jspdf';
@@ -115,32 +115,15 @@ export function AnalysisTab() {
     localStorage.setItem(ANALYSIS_DATE_FILTERS_KEY, JSON.stringify({ desde: fechaDesde, hasta: fechaHasta }));
   }, [fechaDesde, fechaHasta]);
 
-  const formatFechaCorta = (fecha: string) => {
-    if (!fecha) return '';
-    const d = new Date(fecha);
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  };
-
   const limpiarFechas = () => {
     setFechaDesde('');
     setFechaHasta('');
   };
 
   const aplicarAtajoFecha = (tipo: 'mes' | '30dias' | 'trimestre') => {
-    const hoy = new Date();
-    let desde = new Date();
-    
-    if (tipo === 'mes') {
-      desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    } else if (tipo === '30dias') {
-      desde.setDate(hoy.getDate() - 30);
-    } else if (tipo === 'trimestre') {
-      const trimestre = Math.floor(hoy.getMonth() / 3);
-      desde = new Date(hoy.getFullYear(), trimestre * 3, 1);
-    }
-    
-    setFechaDesde(desde.toISOString().split('T')[0]);
-    setFechaHasta(hoy.toISOString().split('T')[0]);
+    const { desde, hasta } = calcularRangoAtajo(tipo);
+    setFechaDesde(desde);
+    setFechaHasta(hasta);
   };
 
   const rangoActivo = useMemo(() => {
@@ -148,12 +131,8 @@ export function AnalysisTab() {
   }, [fechaDesde, fechaHasta]);
 
   const rangoTexto = useMemo(() => {
-    if (!rangoActivo) return '';
-    if (fechaDesde && fechaHasta) return `${formatFechaCorta(fechaDesde)} - ${formatFechaCorta(fechaHasta)}`;
-    if (fechaDesde) return `Desde ${formatFechaCorta(fechaDesde)}`;
-    if (fechaHasta) return `Hasta ${formatFechaCorta(fechaHasta)}`;
-    return '';
-  }, [fechaDesde, fechaHasta, rangoActivo]);
+    return generarTextoRango(fechaDesde, fechaHasta);
+  }, [fechaDesde, fechaHasta]);
 
   const combinedRequerimientos = useMemo(() => {
     const allRequerimientos: Requerimiento[] = [];
@@ -170,22 +149,8 @@ export function AnalysisTab() {
         if (!filteredJardines.includes(req.jardin_codigo)) return false;
 
         // Filtro por fechas
-        if (fechaDesde || fechaHasta) {
-          if (!req.fecha_limite) return false;
-          const fechaLimite = new Date(req.fecha_limite);
-          fechaLimite.setHours(0, 0, 0, 0);
-
-          if (fechaDesde) {
-            const desde = new Date(fechaDesde);
-            desde.setHours(0, 0, 0, 0);
-            if (fechaLimite < desde) return false;
-          }
-
-          if (fechaHasta) {
-            const hasta = new Date(fechaHasta);
-            hasta.setHours(23, 59, 59, 999);
-            if (fechaLimite > hasta) return false;
-          }
+        if (!validarFechaEnRango(req.fecha_limite, fechaDesde, fechaHasta)) {
+          return false;
         }
 
         return true;

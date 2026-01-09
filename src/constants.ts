@@ -19,3 +19,5 @@ export const LINES: Array<{ id: LineType; label: string }> = [
 // ===== CLAVES DE ALMACENAMIENTO =====
 export const STORAGE_KEY = 'flad-analisis-databases';
 export const FILTERS_KEY = 'flad-analisis-filters';
+export const MATRIX_DATE_FILTERS_KEY = 'flad-analisis-matrix-date-filters';
+export const ANALYSIS_DATE_FILTERS_KEY = 'flad-analisis-analysis-date-filters';

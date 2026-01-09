@@ -134,6 +134,10 @@ export function LoadTab() {
           'Días Atraso': req.dias_atraso,
           Multa: req.multa,
           'A Pago': req.a_pago,
+          'Sobre Costo': req.sobre_costo,
+          Utilidades: req.utilidades,
+          IVA: req.iva,
+          'Total Línea': req.total_linea,
           Estado: getRequerimientoStatus(req),
           'OT Código': req.ot_codigo || '',
           'Informe Código': req.informe_codigo || '',
@@ -158,7 +162,11 @@ export function LoadTab() {
           'Fecha Límite': req.fecha_limite,
           Estado: getRequerimientoStatus(req),
           Multa: req.multa,
-          'A Pago': req.a_pago
+          'A Pago': req.a_pago,
+          'Sobre Costo': req.sobre_costo,
+          Utilidades: req.utilidades,
+          IVA: req.iva,
+          'Total Línea': req.total_linea
         }));
         
         const ws = XLSX.utils.json_to_sheet(data);
@@ -175,7 +183,7 @@ export function LoadTab() {
           const current = resumenJardines.get(key) || { cantidad: 0, monto: 0 };
           resumenJardines.set(key, {
             cantidad: current.cantidad + 1,
-            monto: current.monto + req.a_pago
+            monto: current.monto + req.total_linea
           });
         });
       });
