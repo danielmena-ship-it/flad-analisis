@@ -11,6 +11,7 @@ export function MatrixTab() {
   const [selectedStates, setSelectedStates] = useState<RequerimientoStatus[]>([]);
   const [modalFiltrosAbierto, setModalFiltrosAbierto] = useState(false);
   const [viewMode, setViewMode] = useState<'cantidades' | 'montos'>('cantidades');
+  const [tipoDropdownOpen, setTipoDropdownOpen] = useState(false);
   const [expandedLines, setExpandedLines] = useState<Set<LineType>>(new Set());
 
   // Cargar BDs y filtros
@@ -245,19 +246,31 @@ export function MatrixTab() {
             <Grid3x3 className="w-7 h-7" />
             Matriz de Requerimientos
           </h2>
-          <div className="flex gap-2">
+          {/* Dropdown Tipo */}
+          <div className="relative">
             <button
-              onClick={() => setViewMode('cantidades')}
-              className={`px-5 py-2.5 rounded-lg font-medium transition ${viewMode === 'cantidades' ? 'bg-[#5a8fc4] text-white' : 'bg-[#2d3e50] text-[#8b9eb3] hover:bg-[#1a2332]'}`}
+              onClick={() => setTipoDropdownOpen(!tipoDropdownOpen)}
+              className="px-5 py-2.5 rounded-lg font-medium transition bg-[#2d3e50] text-[#e0e6ed] hover:bg-[#1a2332] flex items-center gap-2"
             >
-              Cantidades
+              Tipo
+              <ChevronDown className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setViewMode('montos')}
-              className={`px-5 py-2.5 rounded-lg font-medium transition ${viewMode === 'montos' ? 'bg-[#5a8fc4] text-white' : 'bg-[#2d3e50] text-[#8b9eb3] hover:bg-[#1a2332]'}`}
-            >
-              Montos
-            </button>
+            {tipoDropdownOpen && (
+              <div className="absolute top-full mt-1 bg-[#1a2332] border border-[#2d3e50] rounded-lg shadow-xl z-10 min-w-[160px]">
+                <button
+                  onClick={() => { setViewMode('cantidades'); setTipoDropdownOpen(false); }}
+                  className={`w-full px-4 py-2.5 text-left hover:bg-[#2d3e50] transition ${viewMode === 'cantidades' ? 'text-[#5a8fc4]' : 'text-[#e0e6ed]'}`}
+                >
+                  Cantidades
+                </button>
+                <button
+                  onClick={() => { setViewMode('montos'); setTipoDropdownOpen(false); }}
+                  className={`w-full px-4 py-2.5 text-left hover:bg-[#2d3e50] transition ${viewMode === 'montos' ? 'text-[#5a8fc4]' : 'text-[#e0e6ed]'}`}
+                >
+                  Montos
+                </button>
+              </div>
+            )}
           </div>
           <button
             onClick={() => setModalFiltrosAbierto(true)}

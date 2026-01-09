@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { BarChart3, FileDown, Filter, X } from 'lucide-react';
+import { BarChart3, FileDown, Filter, X, ChevronDown } from 'lucide-react';
 import { RequerimientoStatus, Requerimiento, LoadedDatabase } from '../types';
-import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus, calcularMontoAPagar } from '../utils';
+import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus } from '../utils';
 import { CONTRACTS, LINES, STORAGE_KEY, FILTERS_KEY } from '../constants';
 import { FilterTab } from './FilterTab';
 import jsPDF from 'jspdf';
@@ -28,6 +28,7 @@ import { writeFile } from '@tauri-apps/plugin-fs';
 
 export function AnalysisTab() {
   const [viewMode, setViewMode] = useState<'cantidades' | 'montos'>('cantidades');
+  const [tipoDropdownOpen, setTipoDropdownOpen] = useState(false);
   const [periodMode, setPeriodMode] = useState<'mensual' | 'semanal'>('mensual');
   const [loadedDatabases, setLoadedDatabases] = useState<LoadedDatabase[]>([]);
   const [selectedJardines, setSelectedJardines] = useState<Record<string, string[]>>({});
@@ -147,7 +148,7 @@ export function AnalysisTab() {
       }
 
       const status = getRequerimientoStatus(req);
-      const value = viewMode === 'cantidades' ? 1 : calcularMontoAPagar(req);
+      const value = viewMode === 'cantidades' ? 1 : req.a_pago;
       grouped.get(key)![status] += value;
     });
 
@@ -168,7 +169,8 @@ export function AnalysisTab() {
     return value.toString();
   };
 
-  const formatTooltip = (value: number) => {
+  const formatTooltip = (value: number | undefined) => {
+    if (value === undefined) return '';
     if (viewMode === 'montos') {
       const millones = Math.round(value / 1000000);
       return `MM$${millones}`;
@@ -584,19 +586,31 @@ export function AnalysisTab() {
               {combinedRequerimientos.length} requerimientos de {loadedDatabases.length} bases de datos
             </p>
           </div>
-          <div className="flex gap-2 ml-6">
+          {/* Dropdown Tipo */}
+          <div className="relative ml-6">
             <button
-              onClick={() => setViewMode('cantidades')}
-              className={`px-5 py-2.5 rounded-lg font-medium transition ${viewMode === 'cantidades' ? 'bg-[#5a8fc4] text-white' : 'bg-[#2d3e50] text-[#8b9eb3] hover:bg-[#1a2332]'}`}
+              onClick={() => setTipoDropdownOpen(!tipoDropdownOpen)}
+              className="px-5 py-2.5 rounded-lg font-medium transition bg-[#2d3e50] text-[#e0e6ed] hover:bg-[#1a2332] flex items-center gap-2"
             >
-              Cantidades
+              Tipo
+              <ChevronDown className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setViewMode('montos')}
-              className={`px-5 py-2.5 rounded-lg font-medium transition ${viewMode === 'montos' ? 'bg-[#5a8fc4] text-white' : 'bg-[#2d3e50] text-[#8b9eb3] hover:bg-[#1a2332]'}`}
-            >
-              Montos
-            </button>
+            {tipoDropdownOpen && (
+              <div className="absolute top-full mt-1 bg-[#1a2332] border border-[#2d3e50] rounded-lg shadow-xl z-10 min-w-[160px]">
+                <button
+                  onClick={() => { setViewMode('cantidades'); setTipoDropdownOpen(false); }}
+                  className={`w-full px-4 py-2.5 text-left hover:bg-[#2d3e50] transition ${viewMode === 'cantidades' ? 'text-[#5a8fc4]' : 'text-[#e0e6ed]'}`}
+                >
+                  Cantidades
+                </button>
+                <button
+                  onClick={() => { setViewMode('montos'); setTipoDropdownOpen(false); }}
+                  className={`w-full px-4 py-2.5 text-left hover:bg-[#2d3e50] transition ${viewMode === 'montos' ? 'text-[#5a8fc4]' : 'text-[#e0e6ed]'}`}
+                >
+                  Montos
+                </button>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-3">
@@ -691,8 +705,8 @@ export function AnalysisTab() {
                 ))}
               </Pie>
               <Tooltip 
-                formatter={(value: number) => 
-                  viewMode === 'cantidades' ? value : `$${value.toLocaleString('es-CL')}`
+                formatter={(value: number | undefined) => 
+                  value === undefined ? '' : (viewMode === 'cantidades' ? value : `$${value.toLocaleString('es-CL')}`)
                 }
                 contentStyle={{ 
                   backgroundColor: '#1a2332', 
