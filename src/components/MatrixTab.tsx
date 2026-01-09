@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
-import { Filter, X, Grid3x3, ChevronRight, ChevronDown } from 'lucide-react';
+import { Filter, X, Grid3x3, ChevronRight, ChevronDown, Calendar } from 'lucide-react';
 import { Requerimiento, RequerimientoStatus, LoadedDatabase, ContractType, LineType } from '../types';
 import { STATUS_LABELS, getRequerimientoStatus } from '../utils';
 import { STORAGE_KEY } from '../constants';
 
 const MATRIX_FILTERS_KEY = 'flad-analisis-matrix-filters';
+const MATRIX_DATE_FILTERS_KEY = 'flad-analisis-matrix-date-filters';
 
 export function MatrixTab() {
   const [loadedDatabases, setLoadedDatabases] = useState<LoadedDatabase[]>([]);
@@ -13,6 +14,9 @@ export function MatrixTab() {
   const [viewMode, setViewMode] = useState<'cantidades' | 'montos'>('cantidades');
   const [tipoDropdownOpen, setTipoDropdownOpen] = useState(false);
   const [expandedLines, setExpandedLines] = useState<Set<LineType>>(new Set());
+  const [modalFechasAbierto, setModalFechasAbierto] = useState(false);
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
 
   // Cargar BDs y filtros
   useEffect(() => {
@@ -43,12 +47,69 @@ export function MatrixTab() {
       // Si no hay filtros guardados, inicializar con todos los estados
       setSelectedStates(['pagado', 'recibido', 'atrasado', 'en_curso', 'sin_curso']);
     }
+
+    // Cargar fechas guardadas
+    const savedDates = localStorage.getItem(MATRIX_DATE_FILTERS_KEY);
+    if (savedDates) {
+      try {
+        const { desde, hasta } = JSON.parse(savedDates);
+        if (desde) setFechaDesde(desde);
+        if (hasta) setFechaHasta(hasta);
+      } catch (error) {
+        console.error('Error cargando fechas:', error);
+      }
+    }
   }, []);
 
   // Guardar filtros
   useEffect(() => {
     localStorage.setItem(MATRIX_FILTERS_KEY, JSON.stringify(selectedStates));
   }, [selectedStates]);
+
+  // Guardar fechas
+  useEffect(() => {
+    localStorage.setItem(MATRIX_DATE_FILTERS_KEY, JSON.stringify({ desde: fechaDesde, hasta: fechaHasta }));
+  }, [fechaDesde, fechaHasta]);
+
+  const formatFechaCorta = (fecha: string) => {
+    if (!fecha) return '';
+    const d = new Date(fecha);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  };
+
+  const limpiarFechas = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
+  const aplicarAtajoFecha = (tipo: 'mes' | '30dias' | 'trimestre') => {
+    const hoy = new Date();
+    let desde = new Date();
+    
+    if (tipo === 'mes') {
+      desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    } else if (tipo === '30dias') {
+      desde.setDate(hoy.getDate() - 30);
+    } else if (tipo === 'trimestre') {
+      const trimestre = Math.floor(hoy.getMonth() / 3);
+      desde = new Date(hoy.getFullYear(), trimestre * 3, 1);
+    }
+    
+    setFechaDesde(desde.toISOString().split('T')[0]);
+    setFechaHasta(hoy.toISOString().split('T')[0]);
+  };
+
+  const rangoActivo = useMemo(() => {
+    return Boolean(fechaDesde || fechaHasta);
+  }, [fechaDesde, fechaHasta]);
+
+  const rangoTexto = useMemo(() => {
+    if (!rangoActivo) return '';
+    if (fechaDesde && fechaHasta) return `${formatFechaCorta(fechaDesde)} - ${formatFechaCorta(fechaHasta)}`;
+    if (fechaDesde) return `Desde ${formatFechaCorta(fechaDesde)}`;
+    if (fechaHasta) return `Hasta ${formatFechaCorta(fechaHasta)}`;
+    return '';
+  }, [fechaDesde, fechaHasta, rangoActivo]);
 
   // Obtener todos los requerimientos de las BDs cargadas
   const allRequerimientos = useMemo(() => {
@@ -65,9 +126,30 @@ export function MatrixTab() {
     
     return allRequerimientos.filter(req => {
       const status = getRequerimientoStatus(req);
-      return selectedStates.includes(status);
+      if (!selectedStates.includes(status)) return false;
+
+      // Filtro por fechas
+      if (fechaDesde || fechaHasta) {
+        if (!req.fecha_limite) return false;
+        const fechaLimite = new Date(req.fecha_limite);
+        fechaLimite.setHours(0, 0, 0, 0);
+
+        if (fechaDesde) {
+          const desde = new Date(fechaDesde);
+          desde.setHours(0, 0, 0, 0);
+          if (fechaLimite < desde) return false;
+        }
+
+        if (fechaHasta) {
+          const hasta = new Date(fechaHasta);
+          hasta.setHours(23, 59, 59, 999);
+          if (fechaLimite > hasta) return false;
+        }
+      }
+
+      return true;
     });
-  }, [allRequerimientos, selectedStates]);
+  }, [allRequerimientos, selectedStates, fechaDesde, fechaHasta]);
 
   const toggleState = (state: RequerimientoStatus) => {
     setSelectedStates(prev => 
@@ -279,6 +361,16 @@ export function MatrixTab() {
             <Filter className="w-4 h-4" />
             Filtros
           </button>
+          <button
+            onClick={() => setModalFechasAbierto(true)}
+            className="px-5 py-2.5 rounded-lg font-medium transition bg-[#8b5cf6] hover:bg-[#7c3aed] text-white flex items-center gap-2"
+          >
+            <Calendar className="w-4 h-4" />
+            Fechas
+          </button>
+          {rangoActivo && (
+            <span className="text-xs text-[#64748b] self-center">{rangoTexto}</span>
+          )}
         </div>
         <p className="text-sm text-[#8b9eb3]">
           {filteredRequerimientos.length} requerimientos de {allRequerimientos.length} totales
@@ -517,6 +609,92 @@ export function MatrixTab() {
                 className="px-4 py-2 rounded-lg font-medium transition bg-[#2d3e50] hover:bg-[#3d4e60] text-[#e0e6ed] text-sm"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Filtrar por Fechas */}
+      {modalFechasAbierto && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1a2332] border border-[#2d3e50] rounded-xl shadow-2xl max-w-md w-full mx-4">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#2d3e50]">
+              <h3 className="text-lg font-semibold text-[#e0e6ed] flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#8b5cf6]" />
+                Filtrar por Fechas
+              </h3>
+              <button onClick={() => setModalFechasAbierto(false)} className="text-[#8b9eb3] hover:text-[#e0e6ed]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-[#8b9eb3] mb-1.5">Desde</label>
+                  <input
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    max={fechaHasta || undefined}
+                    style={{ colorScheme: 'dark' }}
+                    className="w-full px-3 py-2 bg-[#0f1419] border border-[#2d3e50] rounded-lg text-[#e0e6ed] text-sm focus:outline-none focus:border-[#8b5cf6] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#8b9eb3] mb-1.5">Hasta</label>
+                  <input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    min={fechaDesde || undefined}
+                    style={{ colorScheme: 'dark' }}
+                    className="w-full px-3 py-2 bg-[#0f1419] border border-[#2d3e50] rounded-lg text-[#e0e6ed] text-sm focus:outline-none focus:border-[#8b5cf6] transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Atajos */}
+              <div className="pt-2 border-t border-[#2d3e50]">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => aplicarAtajoFecha('mes')}
+                    className="flex-1 px-2 py-1.5 bg-[#2d3e50]/50 hover:bg-[#2d3e50] text-[#8b9eb3] hover:text-[#e0e6ed] rounded text-xs transition-colors"
+                  >
+                    Este mes
+                  </button>
+                  <button
+                    onClick={() => aplicarAtajoFecha('30dias')}
+                    className="flex-1 px-2 py-1.5 bg-[#2d3e50]/50 hover:bg-[#2d3e50] text-[#8b9eb3] hover:text-[#e0e6ed] rounded text-xs transition-colors"
+                  >
+                    Últ. 30 días
+                  </button>
+                  <button
+                    onClick={() => aplicarAtajoFecha('trimestre')}
+                    className="flex-1 px-2 py-1.5 bg-[#2d3e50]/50 hover:bg-[#2d3e50] text-[#8b9eb3] hover:text-[#e0e6ed] rounded text-xs transition-colors"
+                  >
+                    Trimestre
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-between p-4 border-t border-[#2d3e50]">
+              <button
+                onClick={limpiarFechas}
+                className="px-4 py-2 rounded-lg font-medium transition bg-[#2d3e50] hover:bg-[#3d4e60] text-[#e0e6ed] text-sm"
+              >
+                Limpiar
+              </button>
+              <button
+                onClick={() => setModalFechasAbierto(false)}
+                className="px-4 py-2 rounded-lg font-medium transition bg-[#8b5cf6] hover:bg-[#7c3aed] text-white text-sm"
+              >
+                Aplicar
               </button>
             </div>
           </div>
