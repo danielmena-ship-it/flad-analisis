@@ -1,5 +1,4 @@
 import { DatabaseJSON, Requerimiento, RequerimientoEnriquecido } from '../types';
-import { calcularMontoAPagar } from '../utils';
 
 /**
  * Enriquece requerimientos con datos de catálogos (jardines, partidas)
@@ -26,7 +25,7 @@ export function enriquecerRequerimientos(
       partida_nombre: partida?.partida || 'Desconocida',
       partida_unidad: partida?.unidad || null,
       dias_atraso: diasAtraso,
-      a_pago: calcularMontoAPagar(req)
+      a_pago: req.total_linea
     };
   });
 }
