@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 import { BarChart3, FileDown, Filter, X, ChevronDown, Calendar } from 'lucide-react';
 import { RequerimientoStatus, Requerimiento, LoadedDatabase } from '../types';
 import { STATUS_LABELS, STATUS_COLORS, calculateStats, getRequerimientoStatus, calcularRangoAtajo, generarTextoRango, validarFechaEnRango } from '../utils';
@@ -38,6 +38,8 @@ export function AnalysisTab() {
   const [modalFechasAbierto, setModalFechasAbierto] = useState(false);
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [top50GraficoExpanded, setTop50GraficoExpanded] = useState(false);
+  const [top50TablaExpanded, setTop50TablaExpanded] = useState(false);
 
   // Recargar filtros cuando se cierra el modal
   useEffect(() => {
@@ -196,7 +198,7 @@ export function AnalysisTab() {
       }
 
       const status = getRequerimientoStatus(req);
-      const value = viewMode === 'cantidades' ? 1 : req.a_pago;
+      const value = viewMode === 'cantidades' ? 1 : req.total_linea;
       grouped.get(key)![status] += value;
     });
 
@@ -208,6 +210,58 @@ export function AnalysisTab() {
       total: Object.values(valores).reduce((sum, val) => sum + val, 0)
     }));
   }, [combinedRequerimientos, periodMode, viewMode]);
+
+  // Calcular Top 50 Partidas
+  const top50Partidas = useMemo(() => {
+    if (combinedRequerimientos.length === 0) return [];
+
+    // Agrupar por partida_item
+    const partidasMap = new Map<string, { cantidad: number; monto: number; descripcion: string }>();
+
+    combinedRequerimientos.forEach(req => {
+      if (!partidasMap.has(req.partida_item)) {
+        // Buscar descripción en las BDs cargadas
+        let descripcion = req.partida_item;
+        for (const db of loadedDatabases) {
+          const partida = db.data.partidas.find(p => p.item === req.partida_item);
+          if (partida) {
+            descripcion = partida.partida;
+            break;
+          }
+        }
+        partidasMap.set(req.partida_item, { cantidad: 0, monto: 0, descripcion });
+      }
+
+      const entry = partidasMap.get(req.partida_item)!;
+      entry.cantidad += 1;
+      entry.monto += req.total_linea;
+    });
+
+    // Convertir a array y ordenar según viewMode
+    const partidasArray = Array.from(partidasMap.entries()).map(([item, data]) => ({
+      item,
+      descripcion: data.descripcion,
+      cantidad: data.cantidad,
+      monto: data.monto
+    }));
+
+    const sortKey = viewMode === 'cantidades' ? 'cantidad' : 'monto';
+    partidasArray.sort((a, b) => b[sortKey] - a[sortKey]);
+
+    // Tomar top 50
+    const top50 = partidasArray.slice(0, 50);
+
+    // Calcular total para porcentajes
+    const totalCantidad = combinedRequerimientos.length;
+    const totalMonto = combinedRequerimientos.reduce((sum, req) => sum + req.total_linea, 0);
+
+    return top50.map((p, index) => ({
+      ...p,
+      ranking: index + 1,
+      cantidadPct: (p.cantidad / totalCantidad) * 100,
+      montoPct: (p.monto / totalMonto) * 100
+    }));
+  }, [combinedRequerimientos, viewMode, loadedDatabases]);
 
   const formatYAxis = (value: number) => {
     if (viewMode === 'montos') {
@@ -544,6 +598,133 @@ export function AnalysisTab() {
         pdf.addImage(imgData, 'PNG', margin, yPos, imgWidth, imgHeight);
       }
 
+      // ========== PÁGINA TOP PARTIDAS (máx 20) ==========
+      pdf.addPage();
+      const partidasPageNum = totalPages + 1;
+      addPageTemplate(partidasPageNum, partidasPageNum);
+
+      yPos = 25;
+      pdf.setFontSize(22);
+      pdf.setTextColor(51, 65, 85);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Top Partidas', margin, yPos);
+
+      yPos += 8;
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Ordenado por ${viewMode === 'cantidades' ? 'cantidad de requerimientos' : 'monto total'}`, margin, yPos);
+
+      yPos += 12;
+
+      // Gráfico Top 20
+      const barCharts = document.querySelectorAll('.recharts-wrapper');
+      const barChart = barCharts[2] as HTMLElement;
+      if (barChart) {
+        const canvas = await html2canvas(barChart, { backgroundColor: '#F8FAFC', scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = contentWidth * 0.7;
+        const imgHeight = Math.min((canvas.height * imgWidth) / canvas.width, 80);
+        pdf.addImage(imgData, 'PNG', margin + (contentWidth - imgWidth) / 2, yPos, imgWidth, imgHeight);
+        yPos += imgHeight + 10;
+      }
+
+      // Tabla Top 30
+      pdf.setFontSize(12);
+      pdf.setTextColor(51, 65, 85);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Top 30', margin, yPos);
+      yPos += 8;
+
+      // Headers de tabla
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('#', margin + 5, yPos);
+      pdf.text('Item', margin + 15, yPos);
+      pdf.text('Partida', margin + 35, yPos);
+      if (viewMode === 'cantidades') {
+        pdf.text('Cant.', margin + contentWidth - 18, yPos, { align: 'right' });
+        pdf.text('%', margin + contentWidth - 5, yPos, { align: 'right' });
+      } else {
+        pdf.text('Monto', margin + contentWidth - 18, yPos, { align: 'right' });
+        pdf.text('%', margin + contentWidth - 5, yPos, { align: 'right' });
+      }
+
+      yPos += 2;
+      pdf.setDrawColor(184, 197, 214);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin + 5, yPos, margin + contentWidth - 5, yPos);
+      yPos += 6;
+
+      // Filas de datos (máximo 30)
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      top50Partidas.slice(0, 30).forEach((partida, index) => {
+        // Normalizar texto: reemplazar caracteres especiales
+        const normalizedDesc = partida.descripcion
+          .replace(/[""″]/g, '"')  // Comillas tipográficas y símbolo pulgadas
+          .replace(/['']/g, "'")    // Apóstrofes tipográficos
+          .replace(/–/g, '-')       // Guión largo
+          .replace(/…/g, '...')     // Puntos suspensivos
+          .trim();
+        
+        // Dividir descripción manualmente por ancho
+        const maxDescWidth = contentWidth - 45;  // Más espacio con columnas ajustadas
+        const words = normalizedDesc.split(' ');
+        const descLines: string[] = [];
+        let currentLine = '';
+        
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          if (pdf.getTextWidth(testLine) > maxDescWidth) {
+            if (currentLine) {
+              descLines.push(currentLine);
+              currentLine = word;
+            } else {
+              // Palabra muy larga, forzar corte
+              descLines.push(word);
+            }
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) descLines.push(currentLine);
+        
+        // Limitar a 2 líneas
+        if (descLines.length > 2) {
+          descLines.length = 2;
+          descLines[1] = descLines[1] + '...';
+        }
+        
+        const rowHeight = Math.max(4.5, descLines.length * 2.5 + 1.5);
+
+        // Alternar color de fondo
+        if (index % 2 === 0) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(margin + 5, yPos - 3.5, contentWidth - 10, rowHeight, 'F');
+        }
+
+        pdf.setTextColor(51, 65, 85);
+        pdf.text(partida.ranking.toString(), margin + 5, yPos);
+        pdf.text(partida.item, margin + 15, yPos);
+        
+        // Imprimir descripción
+        descLines.forEach((line, lineIndex) => {
+          pdf.text(line, margin + 35, yPos + (lineIndex * 2.5));
+        });
+
+        if (viewMode === 'cantidades') {
+          pdf.text(partida.cantidad.toString(), margin + contentWidth - 18, yPos, { align: 'right' });
+          pdf.text(`${partida.cantidadPct.toFixed(1)}%`, margin + contentWidth - 5, yPos, { align: 'right' });
+        } else {
+          pdf.text(`$${Math.round(partida.monto).toLocaleString('es-CL')}`, margin + contentWidth - 18, yPos, { align: 'right' });
+          pdf.text(`${partida.montoPct.toFixed(1)}%`, margin + contentWidth - 5, yPos, { align: 'right' });
+        }
+
+        yPos += rowHeight;
+      });
+
       // Guardar PDF
       const pdfBlob = pdf.output('blob');
       const pdfArrayBuffer = await pdfBlob.arrayBuffer();
@@ -603,10 +784,11 @@ export function AnalysisTab() {
             className="px-5 py-2.5 rounded-lg font-medium transition bg-[#f59e0b] hover:bg-[#e08e0a] text-white flex items-center gap-2"
           >
             <Filter className="w-4 h-4" />
-            Filtros
+            Jardin
           </button>
           <button
             onClick={() => setModalFechasAbierto(true)}
+            title="Filtra requerimientos a partir de su fecha límite"
             className="px-5 py-2.5 rounded-lg font-medium transition bg-[#8b5cf6] hover:bg-[#7c3aed] text-white flex items-center gap-2"
           >
             <Calendar className="w-4 h-4" />
@@ -817,6 +999,121 @@ export function AnalysisTab() {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Panel Top Partidas */}
+      <div className="mt-8 bg-[#1a2332] border border-[#2d3e50] rounded-lg p-6 shadow-xl">
+        <h3 className="font-semibold text-[#a8c5e0] mb-4">Top Partidas</h3>
+        
+        {/* Gráfico */}
+        <div className="mb-6">
+          <ResponsiveContainer width="100%" height={top50GraficoExpanded ? 1200 : 600}>
+            <BarChart 
+              data={top50Partidas.slice(0, top50GraficoExpanded ? 50 : 20)} 
+              layout="vertical"
+              margin={{ left: 60, right: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#2d3e50" />
+              <XAxis 
+                type="number" 
+                stroke="#8b9eb3"
+                style={{ fontSize: '11px' }}
+                tickFormatter={formatYAxis}
+              />
+              <YAxis 
+                type="category" 
+                dataKey="item" 
+                stroke="#8b9eb3"
+                style={{ fontSize: '11px' }}
+                width={50}
+              />
+              <Tooltip 
+                formatter={formatTooltip}
+                contentStyle={{ 
+                  backgroundColor: '#1a2332', 
+                  border: '1px solid #2d3e50', 
+                  color: '#e0e6ed',
+                  borderRadius: '8px'
+                }}
+              />
+              <Bar 
+                dataKey={viewMode === 'cantidades' ? 'cantidad' : 'monto'} 
+                fill="#667eea"
+                radius={[0, 4, 4, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+          
+          {top50Partidas.length > 20 && (
+            <button
+              onClick={() => setTop50GraficoExpanded(!top50GraficoExpanded)}
+              className="w-full mt-2 py-2 text-sm text-[#8b9eb3] hover:text-[#a8c5e0] hover:bg-[#2d3e50]/30 rounded transition-colors"
+            >
+              {top50GraficoExpanded 
+                ? '▲ Contraer gráfico' 
+                : `▼ Ver más (${top50Partidas.length - 20} partidas restantes)`
+              }
+            </button>
+          )}
+        </div>
+
+        {/* Tabla completa */}
+        <div className="overflow-x-auto">
+          <table className="table-auto">
+            <thead>
+              <tr className="border-b border-[#2d3e50]">
+                <th className="text-left py-3 px-3 text-[#8b9eb3] font-medium text-sm w-12">#</th>
+                <th className="text-left py-3 px-3 text-[#8b9eb3] font-medium text-sm w-24">Item</th>
+                <th className="text-left py-3 px-3 text-[#8b9eb3] font-medium text-sm">Partida</th>
+                {viewMode === 'cantidades' ? (
+                  <>
+                    <th className="text-right py-3 px-3 text-[#8b9eb3] font-medium text-sm w-28">Cantidad</th>
+                    <th className="text-right py-3 px-3 text-[#8b9eb3] font-medium text-sm w-16">%</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="text-right py-3 px-3 text-[#8b9eb3] font-medium text-sm w-36">Monto</th>
+                    <th className="text-right py-3 px-3 text-[#8b9eb3] font-medium text-sm w-16">%</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {top50Partidas.slice(0, top50TablaExpanded ? 50 : 10).map((partida) => (
+                <tr key={partida.item} className="border-b border-[#2d3e50]/50 hover:bg-[#2d3e50]/30 transition-colors">
+                  <td className="py-2.5 px-3 text-[#a8c5e0] text-sm">{partida.ranking}</td>
+                  <td className="py-2.5 px-3 text-[#e0e6ed] text-sm font-medium">{partida.item}</td>
+                  <td className="py-2.5 px-3 text-[#8b9eb3] text-sm">{partida.descripcion}</td>
+                  {viewMode === 'cantidades' ? (
+                    <>
+                      <td className="py-2.5 px-3 text-right text-[#e0e6ed] text-sm">{partida.cantidad}</td>
+                      <td className="py-2.5 px-3 text-right text-[#8b9eb3] text-sm">{partida.cantidadPct.toFixed(1)}%</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="py-2.5 px-3 text-right text-[#e0e6ed] text-sm">${partida.monto.toLocaleString('es-CL')}</td>
+                      <td className="py-2.5 px-3 text-right text-[#8b9eb3] text-sm">{partida.montoPct.toFixed(1)}%</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+              
+              {top50Partidas.length > 10 && (
+                <tr 
+                  onClick={() => setTop50TablaExpanded(!top50TablaExpanded)}
+                  className="border-b border-[#2d3e50]/50 hover:bg-[#2d3e50]/50 cursor-pointer transition-colors"
+                >
+                  <td colSpan={5} className="py-3 px-3 text-center text-[#8b9eb3] hover:text-[#a8c5e0] text-sm">
+                    {top50TablaExpanded 
+                      ? '▲ Contraer tabla' 
+                      : `▼ Ver más (${top50Partidas.length - 10} partidas restantes)`
+                    }
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
       </>
       )}
 
@@ -861,8 +1158,8 @@ export function AnalysisTab() {
 
       {/* Modal Filtrar por Fechas */}
       {modalFechasAbierto && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#1a2332] border border-[#2d3e50] rounded-xl shadow-2xl max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setModalFechasAbierto(false)}>
+          <div className="bg-[#1a2332] border border-[#2d3e50] rounded-xl shadow-2xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-[#2d3e50]">
               <h3 className="text-lg font-semibold text-[#e0e6ed] flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-[#8b5cf6]" />

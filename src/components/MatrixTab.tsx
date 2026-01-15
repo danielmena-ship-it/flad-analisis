@@ -151,7 +151,14 @@ export function MatrixTab() {
     loadedDatabases.forEach(db => {
       const dbRequerimientos = db.data.requerimientos.filter(req => {
         const status = getRequerimientoStatus(req);
-        return selectedStates.includes(status);
+        if (!selectedStates.includes(status)) return false;
+
+        // Aplicar filtro por fechas
+        if (!validarFechaEnRango(req.fecha_limite, fechaDesde, fechaHasta)) {
+          return false;
+        }
+
+        return true;
       });
       
       dbRequerimientos.forEach(req => {
@@ -162,14 +169,13 @@ export function MatrixTab() {
         if (viewMode === 'cantidades') {
           matrix[db.line][db.contract][req.jardin_codigo] += 1;
         } else {
-          const valor = req.precio_total - req.multa;
-          matrix[db.line][db.contract][req.jardin_codigo] += valor;
+          matrix[db.line][db.contract][req.jardin_codigo] += req.total_linea;
         }
       });
     });
     
     return matrix;
-  }, [loadedDatabases, selectedStates, viewMode]);
+  }, [loadedDatabases, selectedStates, viewMode, fechaDesde, fechaHasta]);
 
   // Obtener lista de jardines por línea
   const jardinesByLine = useMemo(() => {
@@ -215,21 +221,27 @@ export function MatrixTab() {
     loadedDatabases.forEach(db => {
       const dbRequerimientos = db.data.requerimientos.filter(req => {
         const status = getRequerimientoStatus(req);
-        return selectedStates.includes(status);
+        if (!selectedStates.includes(status)) return false;
+
+        // Aplicar filtro por fechas
+        if (!validarFechaEnRango(req.fecha_limite, fechaDesde, fechaHasta)) {
+          return false;
+        }
+
+        return true;
       });
       
       dbRequerimientos.forEach(req => {
         if (viewMode === 'cantidades') {
           matrix[db.contract][db.line] += 1;
         } else {
-          const valor = req.precio_total - req.multa;
-          matrix[db.contract][db.line] += valor;
+          matrix[db.contract][db.line] += req.total_linea;
         }
       });
     });
     
     return matrix;
-  }, [loadedDatabases, selectedStates, viewMode]);
+  }, [loadedDatabases, selectedStates, viewMode, fechaDesde, fechaHasta]);
 
   const contracts = [
     { id: 'mantencion' as ContractType, label: 'Mantención' },
@@ -324,10 +336,11 @@ export function MatrixTab() {
             className="px-5 py-2.5 rounded-lg font-medium transition bg-[#f59e0b] hover:bg-[#e08e0a] text-white flex items-center gap-2"
           >
             <Filter className="w-4 h-4" />
-            Filtros
+            Estado
           </button>
           <button
             onClick={() => setModalFechasAbierto(true)}
+            title="Filtra requerimientos a partir de su fecha límite"
             className="px-5 py-2.5 rounded-lg font-medium transition bg-[#8b5cf6] hover:bg-[#7c3aed] text-white flex items-center gap-2"
           >
             <Calendar className="w-4 h-4" />
@@ -582,8 +595,8 @@ export function MatrixTab() {
 
       {/* Modal Filtrar por Fechas */}
       {modalFechasAbierto && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#1a2332] border border-[#2d3e50] rounded-xl shadow-2xl max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setModalFechasAbierto(false)}>
+          <div className="bg-[#1a2332] border border-[#2d3e50] rounded-xl shadow-2xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#2d3e50]">
               <h3 className="text-lg font-semibold text-[#e0e6ed] flex items-center gap-2">

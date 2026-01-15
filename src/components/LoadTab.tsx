@@ -109,7 +109,7 @@ export function LoadTab() {
     try {
       const workbook = XLSX.utils.book_new();
 
-      // HOJA 1: Consolidado General (todos los requerimientos enriquecidos)
+      // HOJA 1: Consolidado General (solo campos de BD real)
       const todosRequerimientos = loadedDatabases.flatMap(db => {
         const enriquecidos = enriquecerRequerimientos(db.data.requerimientos, db.data);
         return enriquecidos.map(req => ({
@@ -127,54 +127,29 @@ export function LoadTab() {
           'Fecha Inicio': req.fecha_inicio,
           'Fecha Registro': req.fecha_registro,
           'Plazo Días': req.plazo_dias,
-          'Plazo Adicional': req.plazo_adicional,
+          'Plazo Observación': req.plazo_observacion || 0,
           'Plazo Total': req.plazo_total,
           'Fecha Límite': req.fecha_limite,
           'Fecha Recepción': req.fecha_recepcion || '',
-          'Días Atraso': req.dias_atraso,
+          'Días Atraso': req.dias_atraso || 0,
           Multa: req.multa,
-          'A Pago': req.a_pago,
           'Sobre Costo': req.sobre_costo,
+          'A Pago': req.a_pago,
           Utilidades: req.utilidades,
           IVA: req.iva,
           'Total Línea': req.total_linea,
-          Estado: getRequerimientoStatus(req),
-          'OT Código': req.ot_codigo || '',
-          'Informe Código': req.informe_codigo || '',
           Descripción: req.descripcion || '',
-          Observaciones: req.observaciones || ''
+          Observaciones: req.observaciones || '',
+          Estado: req.estado,
+          'OT Código': req.ot_codigo || '',
+          'Informe Código': req.informe_codigo || ''
         }));
       });
 
       const wsConsolidado = XLSX.utils.json_to_sheet(todosRequerimientos);
       XLSX.utils.book_append_sheet(workbook, wsConsolidado, 'Consolidado');
 
-      // HOJA 2: Por Contrato
-      loadedDatabases.forEach(db => {
-        const enriquecidos = enriquecerRequerimientos(db.data.requerimientos, db.data);
-        const data = enriquecidos.map(req => ({
-          Línea: db.line,
-          'Jardín': req.jardin_nombre,
-          Recinto: req.recinto,
-          Partida: req.partida_nombre,
-          Cantidad: req.cantidad,
-          'Precio Total': req.precio_total,
-          'Fecha Límite': req.fecha_limite,
-          Estado: getRequerimientoStatus(req),
-          Multa: req.multa,
-          'A Pago': req.a_pago,
-          'Sobre Costo': req.sobre_costo,
-          Utilidades: req.utilidades,
-          IVA: req.iva,
-          'Total Línea': req.total_linea
-        }));
-        
-        const ws = XLSX.utils.json_to_sheet(data);
-        const sheetName = db.contract.substring(0, 31); // Max 31 chars
-        XLSX.utils.book_append_sheet(workbook, ws, sheetName);
-      });
-
-      // HOJA 3: Resumen por Jardín
+      // HOJA 2: Resumen por Jardín
       const resumenJardines = new Map<string, { cantidad: number; monto: number }>();
       loadedDatabases.forEach(db => {
         const enriquecidos = enriquecerRequerimientos(db.data.requerimientos, db.data);

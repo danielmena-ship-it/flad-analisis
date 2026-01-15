@@ -20,22 +20,22 @@ export function Bienvenida({ onContinue }: BienvenidaProps) {
           <p className="text-base leading-[1.7] text-[#a8b5c7] mb-4 text-justify">
             FLAD Análisis procesa múltiples bases de datos de contratos de mantención para generar 
             análisis estadísticos consolidados. El sistema permite combinar datos de diferentes 
-            contratos y líneas presupuestarias, aplicar filtros personalizados por jardín, y 
-            visualizar métricas de desempeño en tiempo real.
+            contratos y líneas presupuestarias, aplicar filtros personalizados por jardín y estado, 
+            y visualizar métricas de desempeño en tiempo real.
           </p>
           
           <p className="text-base leading-[1.7] text-[#a8b5c7] mb-4 text-justify">
-            Las capacidades incluyen: importación de bases de datos JSON, filtrado granular de 
-            jardines por contrato, análisis de cantidades y montos por estado, y visualización de 
-            evolución temporal mediante gráficos interactivos que muestran tendencias mensuales 
-            y semanales de cada categoría.
+            Las capacidades incluyen: importación de bases de datos JSON, matriz de estados por 
+            contrato y línea con desglose por jardín, análisis de cantidades y montos distribuidos 
+            por categoría, evolución temporal mensual y semanal, ranking Top 50 de partidas más 
+            relevantes, y filtros de fechas para análisis de períodos específicos.
           </p>
           
           <p className="text-base leading-[1.7] text-[#a8b5c7] mb-4 text-justify">
             El sistema automatiza cálculos de porcentajes, genera gráficos de distribución y 
-            evolución temporal, y mantiene sincronización entre filtros y análisis. Los tres 
-            módulos operan integrados para optimizar el análisis multi-contrato de mantención 
-            en jardines infantiles JUNJI.
+            evolución temporal con visualizaciones expandibles, y mantiene sincronización entre 
+            filtros y análisis. Los tres módulos operan integrados para optimizar el análisis 
+            multi-contrato de mantención en jardines infantiles JUNJI.
           </p>
 
           <div className="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mt-8">
@@ -92,7 +92,7 @@ export function Bienvenida({ onContinue }: BienvenidaProps) {
             Desarrollado con Claude Sonnet 4.5
           </p>
           <p className="text-xs text-[#5a8fc4] font-semibold mt-2 m-1 leading-[1.4]">
-            Versión 1.0.0
+            Versión 1.1.0
           </p>
         </div>
       </div>

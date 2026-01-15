@@ -38,19 +38,22 @@ export interface Requerimiento {
   fecha_inicio: string;
   fecha_registro: string;
   estado: string;
+  ot_id: number | null;
   ot_codigo: string | null;
+  informe_pago_id: number | null;
   informe_codigo: string | null;
   fecha_recepcion: string | null;
   plazo_dias: number;
-  plazo_adicional: number;
+  plazo_observacion: number;
   plazo_total: number;
   fecha_limite: string;
+  dias_atraso: number;         // Calculado por trigger en BD
   multa: number;
-  a_pago: number;              // Ya calculado en BD
-  sobre_costo: number;         // Ya calculado en BD
-  utilidades: number;          // Ya calculado en BD
-  iva: number;                 // Ya calculado en BD
-  total_linea: number;         // Ya calculado en BD
+  a_pago: number;              // Calculado por trigger en BD
+  sobre_costo: number;         // Calculado por trigger en BD
+  utilidades: number;          // Calculado por trigger en BD
+  iva: number;                 // Calculado por trigger en BD
+  total_linea: number;         // Calculado por trigger en BD
   descripcion: string | null;
   observaciones: string | null;
 }
@@ -103,7 +106,6 @@ export interface RequerimientoEnriquecido extends Requerimiento {
   jardin_nombre: string;
   partida_nombre: string;
   partida_unidad: string | null;
-  dias_atraso: number;  // Único campo calculado dinámicamente
 }
 
 export interface StatsData {

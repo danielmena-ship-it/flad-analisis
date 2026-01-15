@@ -13,18 +13,13 @@ export function enriquecerRequerimientos(
   return requerimientos.map(req => {
     const jardin = jardinMap.get(req.jardin_codigo);
     const partida = partidaMap.get(req.partida_item);
-    
-    // Calcular días de atraso
-    const fechaLimite = new Date(req.fecha_limite);
-    const hoy = new Date();
-    const diasAtraso = Math.max(0, Math.floor((hoy.getTime() - fechaLimite.getTime()) / (1000 * 60 * 60 * 24)));
 
     return {
       ...req,
       jardin_nombre: jardin?.nombre || 'Desconocido',
       partida_nombre: partida?.partida || 'Desconocida',
       partida_unidad: partida?.unidad || null,
-      dias_atraso: diasAtraso,
+      // dias_atraso viene directamente de BD (calculado por trigger)
       a_pago: req.total_linea
     };
   });
