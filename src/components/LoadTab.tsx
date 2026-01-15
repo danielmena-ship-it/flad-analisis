@@ -4,7 +4,7 @@ import { DatabaseJSON, ContractType, LineType, LoadedDatabase } from '../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { esFormatoNuevo, obtenerFechaExportacion, enriquecerRequerimientos } from '../utils/database';
-import { getRequerimientoStatus, formatearFecha } from '../utils';
+import { formatearFecha } from '../utils';
 import { CONTRACTS, LINES, STORAGE_KEY } from '../constants';
 import * as XLSX from 'xlsx';
 
