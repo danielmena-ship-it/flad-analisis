@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { DatabaseJSON, ContractType, LineType, LoadedDatabase } from '../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
-import { esFormatoNuevo, obtenerFechaExportacion, enriquecerRequerimientos } from '../utils/database';
+import { esFormatoNuevo, enriquecerRequerimientos } from '../utils/database';
 import { formatearFecha } from '../utils';
 import { CONTRACTS, LINES, STORAGE_KEY } from '../constants';
 import * as XLSX from 'xlsx';
@@ -85,8 +85,9 @@ export function LoadTab() {
         return;
       }
       
-      const fechaExportacion = obtenerFechaExportacion(data);
-      const fechaFormateada = formatearFecha(fechaExportacion);
+      // Usar fecha actual de carga (hoy)
+      const fechaCarga = new Date();
+      const fechaFormateada = formatearFecha(fechaCarga);
       
       const newDB: LoadedDatabase = {
         contract: selectedContract,
