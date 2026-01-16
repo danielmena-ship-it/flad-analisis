@@ -280,6 +280,26 @@ export function AnalysisTab() {
     return value;
   };
 
+  // Tooltip customizado para Top Partidas
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-[#1a2332] border border-[#2d3e50] rounded-lg p-3" style={{ color: '#e0e6ed' }}>
+          <p className="font-semibold text-[#5a8fc4] mb-1">{data.item}</p>
+          <p className="text-sm text-[#8b9eb3] mb-2">{data.descripcion}</p>
+          <p className="text-[#e0e6ed]">
+            {viewMode === 'montos' 
+              ? `monto: MM$${Math.round(data.monto / 1000000)}`
+              : `cantidad: ${data.cantidad}`
+            }
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (loadedDatabases.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-[#6b7d8f]">
@@ -1027,13 +1047,8 @@ export function AnalysisTab() {
                 width={50}
               />
               <Tooltip 
-                formatter={formatTooltip}
-                contentStyle={{ 
-                  backgroundColor: '#1a2332', 
-                  border: '1px solid #2d3e50', 
-                  color: '#e0e6ed',
-                  borderRadius: '8px'
-                }}
+                content={<CustomTooltip />}
+                cursor={{ fill: 'rgba(102, 126, 234, 0.1)' }}
               />
               <Bar 
                 dataKey={viewMode === 'cantidades' ? 'cantidad' : 'monto'} 

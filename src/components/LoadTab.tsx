@@ -1,5 +1,5 @@
 import { Download, FileSpreadsheet, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DatabaseJSON, ContractType, LineType, LoadedDatabase } from '../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -16,14 +16,30 @@ export function LoadTab() {
   
   // Feedback toast
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const feedbackTimeoutRef = useRef<number | null>(null);
   
   // Modal confirmación borrar
   const [deleteModal, setDeleteModal] = useState<{ contract: ContractType; line: LineType } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const showFeedback = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    // Limpiar timeout anterior
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
+    
     setFeedback({ message, type });
-    setTimeout(() => setFeedback(null), 3000);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 3000);
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Cargar desde localStorage al montar
   useEffect(() => {
@@ -104,7 +120,9 @@ export function LoadTab() {
   };
 
   const confirmDelete = () => {
-    if (!deleteModal) return;
+    if (!deleteModal || isDeleting) return;
+    
+    setIsDeleting(true);
     
     const updatedDBs = loadedDatabases.filter(
       db => !(db.contract === deleteModal.contract && db.line === deleteModal.line)
@@ -114,6 +132,7 @@ export function LoadTab() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDBs));
     setForceUpdate(prev => prev + 1);
     setDeleteModal(null);
+    setIsDeleting(false);
     showFeedback('Base de datos eliminada');
   };
 
@@ -328,7 +347,7 @@ export function LoadTab() {
 
       {/* Modal Confirmación Borrar */}
       {deleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteModal(null)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setDeleteModal(null)}>
           <div className="bg-[#1a2332] border border-[#2d3e50] rounded-lg p-6 max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-[#e0e6ed] mb-3">Confirmar eliminación</h3>
             <p className="text-[#8b9eb3] mb-6">
@@ -343,9 +362,10 @@ export function LoadTab() {
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Eliminar
+                {isDeleting ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
           </div>
