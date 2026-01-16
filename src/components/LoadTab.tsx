@@ -13,6 +13,17 @@ export function LoadTab() {
   const [selectedContract, setSelectedContract] = useState<ContractType | null>(null);
   const [selectedLine, setSelectedLine] = useState<LineType | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
+  
+  // Feedback toast
+  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  
+  // Modal confirmación borrar
+  const [deleteModal, setDeleteModal] = useState<{ contract: ContractType; line: LineType } | null>(null);
+
+  const showFeedback = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    setFeedback({ message, type });
+    setTimeout(() => setFeedback(null), 3000);
+  };
 
   // Cargar desde localStorage al montar
   useEffect(() => {
@@ -54,7 +65,7 @@ export function LoadTab() {
       
       // Validar formato
       if (!esFormatoNuevo(data)) {
-        alert('⚠️ Formato inválido. Exporta desde FLAD actualizado.');
+        showFeedback('⚠️ Formato inválido. Exporta desde FLAD actualizado.', 'warning');
         return;
       }
       
@@ -77,9 +88,9 @@ export function LoadTab() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDBs));
       setForceUpdate(prev => prev + 1);
 
-      alert(`✓ Base cargada: ${selectedContract} - ${selectedLine}\nFecha: ${fechaFormateada}`);
+      showFeedback(`✓ Base cargada: ${selectedContract} - ${selectedLine} (${fechaFormateada})`);
     } catch (error) {
-      alert('Error al cargar el archivo JSON');
+      showFeedback('Error al cargar el archivo JSON', 'error');
       console.error(error);
     } finally {
       setSelectedContract(null);
@@ -89,20 +100,26 @@ export function LoadTab() {
   };
 
   const handleDeleteDatabase = (contract: ContractType, line: LineType) => {
-    if (!confirm(`¿Eliminar base de datos ${contract} - ${line}?`)) return;
+    setDeleteModal({ contract, line });
+  };
+
+  const confirmDelete = () => {
+    if (!deleteModal) return;
     
     const updatedDBs = loadedDatabases.filter(
-      db => !(db.contract === contract && db.line === line)
+      db => !(db.contract === deleteModal.contract && db.line === deleteModal.line)
     );
     
     setLoadedDatabases(updatedDBs);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedDBs));
     setForceUpdate(prev => prev + 1);
+    setDeleteModal(null);
+    showFeedback('Base de datos eliminada');
   };
 
   const exportarConsolidado = async () => {
     if (loadedDatabases.length === 0) {
-      alert('No hay bases de datos cargadas');
+      showFeedback('No hay bases de datos cargadas', 'warning');
       return;
     }
 
@@ -186,11 +203,11 @@ export function LoadTab() {
 
       if (filePath) {
         await writeFile(filePath, excelBuffer);
-        alert('✓ Archivo Excel exportado correctamente');
+        showFeedback('✓ Archivo Excel exportado correctamente');
       }
     } catch (error) {
       console.error('Error al exportar:', error);
-      alert('Error al exportar el archivo');
+      showFeedback('Error al exportar el archivo', 'error');
     }
   };
 
@@ -297,6 +314,43 @@ export function LoadTab() {
         onChange={handleFileLoad}
         className="hidden"
       />
+
+      {/* Toast Feedback */}
+      {feedback && (
+        <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg border animate-fade-in ${
+          feedback.type === 'success' ? 'bg-green-900/20 text-green-400 border-green-500' :
+          feedback.type === 'error' ? 'bg-red-900/20 text-red-400 border-red-500' :
+          'bg-yellow-900/15 text-yellow-400 border-yellow-500/30'
+        }`}>
+          {feedback.message}
+        </div>
+      )}
+
+      {/* Modal Confirmación Borrar */}
+      {deleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteModal(null)}>
+          <div className="bg-[#1a2332] border border-[#2d3e50] rounded-lg p-6 max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-[#e0e6ed] mb-3">Confirmar eliminación</h3>
+            <p className="text-[#8b9eb3] mb-6">
+              ¿Eliminar base de datos <span className="text-[#5a8fc4] font-medium">{deleteModal.contract} - {deleteModal.line}</span>?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteModal(null)}
+                className="px-4 py-2 bg-[#2d3e50] text-[#8b9eb3] rounded-lg hover:bg-[#3d4e60] transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
