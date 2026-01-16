@@ -86,7 +86,7 @@ export function LoadTab() {
       }
       
       // Usar fecha actual de carga (hoy)
-      const fechaCarga = new Date();
+      const fechaCarga = new Date().toISOString();
       const fechaFormateada = formatearFecha(fechaCarga);
       
       const newDB: LoadedDatabase = {
